@@ -48,7 +48,7 @@ class MainActivity : Activity() {
         }
 
         root.addView(label("WINDOWBRIDGE", 27f, 0xFFEAF2FF.toInt(), true), matchWrap())
-        root.addView(label("WINDOWS APP LIBRARY • v0.9.7", 12f, 0xFF79AFFF.toInt(), true).apply {
+        root.addView(label("WINDOWS APP LIBRARY • v0.9.8", 12f, 0xFF79AFFF.toInt(), true).apply {
             setPadding(0, dp(8), 0, dp(24))
         }, matchWrap())
 
@@ -135,6 +135,10 @@ class MainActivity : Activity() {
         root.addView(Button(this).apply {
             text = "SCAN FOR DUPLICATE FILES"
             setOnClickListener { scanForDuplicateInstallers() }
+        }, matchWrap())
+        root.addView(Button(this).apply {
+            text = "EXPORT INSTALLER INVENTORY (CSV)"
+            setOnClickListener { exportLibraryReportPicker() }
         }, matchWrap())
 
         root.addView(Button(this).apply {
@@ -268,6 +272,9 @@ class MainActivity : Activity() {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == REQUEST_PICK_FILE && resultCode == RESULT_OK) {
             data?.data?.let { importInstaller(it) }
+        }
+        if (requestCode == REQUEST_EXPORT_REPORT && resultCode == RESULT_OK) {
+            data?.data?.let { exportLibraryReport(it) }
         }
     }
 
@@ -623,6 +630,50 @@ class MainActivity : Activity() {
             }
     }
 
+    private fun exportLibraryReportPicker() {
+        val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "text/csv"
+            putExtra(Intent.EXTRA_TITLE, "windowbridge-installer-inventory.csv")
+        }
+        try {
+            startActivityForResult(intent, REQUEST_EXPORT_REPORT)
+        } catch (_: Exception) {
+            Toast.makeText(this, "Could not open a file picker to save the report.", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun exportLibraryReport(uri: Uri) {
+        val files = File(filesDir, "installers").listFiles()?.filter { it.isFile }
+            ?.sortedBy { it.name.lowercase() } ?: emptyList()
+        try {
+            contentResolver.openOutputStream(uri)?.bufferedWriter(Charsets.UTF_8)?.use { writer ->
+                writer.appendLine("filename,file_type,size_bytes,last_modified")
+                files.forEach { file ->
+                    val fields = listOf(
+                        file.name,
+                        file.extension.uppercase(),
+                        file.length().toString(),
+                        java.text.DateFormat.getDateTimeInstance().format(java.util.Date(file.lastModified()))
+                    )
+                    writer.appendLine(fields.joinToString(",") { csvEscape(it) })
+                }
+            } ?: throw IOException("Android could not open the selected destination.")
+            status.text = "Exported inventory for ${files.size} installer(s)."
+            AlertDialog.Builder(this)
+                .setTitle("Inventory exported")
+                .setMessage("Saved a CSV report for ${files.size} installer(s). It includes file names, types, sizes, and modified dates, but not file contents or private storage paths.")
+                .setPositiveButton("OK", null)
+                .show()
+        } catch (e: Exception) {
+            status.text = "Export failed: ${e.message ?: "could not save report"}"
+            Toast.makeText(this, "Could not save the inventory report.", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun csvEscape(value: String): String =
+        "\"" + value.replace("\"", "\"\"") + "\""
+
     private fun scanForDuplicateInstallers() {
         val folder = File(filesDir, "installers")
         val files = folder.listFiles()?.filter { it.isFile } ?: emptyList()
@@ -768,6 +819,7 @@ class MainActivity : Activity() {
 
     companion object {
         private const val REQUEST_PICK_FILE = 42
+        private const val REQUEST_EXPORT_REPORT = 43
         private const val EXTRA_SHORTCUT_FILE = "com.windowbridge.EXTRA_SHORTCUT_FILE"
         private const val PREFS = "windowbridge_settings"
         private const val KEY_PROFILE = "compatibility_profile"
