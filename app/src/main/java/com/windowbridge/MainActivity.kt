@@ -207,7 +207,53 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun runtimeSummary(): String = if (packageManager.getLaunchIntentForPackage("com.winlator") != null) {\n        "RUNTIME DETECTED: Winlator appears to be installed."\n    } else {\n        "RUNTIME NOT DETECTED: Install Winlator to try running Windows apps."\n    }\n\n    private fun openInstallerInRuntime(file: File) {\n        val launch = packageManager.getLaunchIntentForPackage("com.winlator")\n        if (launch == null) {\n            AlertDialog.Builder(this)\n                .setTitle("Winlator not detected")\n                .setMessage("Install Winlator from its official releases page, open it once, then return here. In Winlator, create a container and use its file browser to locate/import the installer. Windows apps are not guaranteed to work on every Android device.")\n                .setNegativeButton("Close", null)\n                .setPositiveButton("Get Winlator") { _, _ -> openRuntimeGuide() }\n                .show()\n            return\n        }\n        AlertDialog.Builder(this)\n            .setTitle("Open ${file.name} in Winlator")\n            .setMessage("WindowBridge cannot force Winlator to execute a private installer directly. You can open Winlator now, then use its file browser to locate or import the installer. If direct sharing is supported by your Winlator build, use the sharing button instead.")\n            .setNegativeButton("Cancel", null)\n            .setPositiveButton("Open Winlator") { _, _ ->\n                try { startActivity(launch) } catch (_: Exception) { shareInstaller(file) }\n            }\n            .setNeutralButton("Try direct handoff") { _, _ -> sendToWinlator(file) }\n            .show()\n    }\n\n    private fun sendToWinlator(file: File) {\n        try {\n            val uri = FileProvider.getUriForFile(this, "$packageName.files", file)\n            val handoff = Intent(Intent.ACTION_SEND).apply {\n                type = "application/octet-stream"\n                putExtra(Intent.EXTRA_STREAM, uri)\n                clipData = android.content.ClipData.newUri(contentResolver, file.name, uri)\n                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)\n                setPackage("com.winlator")\n            }\n            startActivity(handoff)\n            status.text = "Sent to Winlator. If it does not import the file, use Share with another app or open the installer from Winlator’s file browser."\n        } catch (_: Exception) {\n            status.text = "Winlator could not accept a direct installer handoff. Showing compatible apps instead."\n            shareInstaller(file)\n        }\n    }\n\n    private fun shareInstaller(file: File) {
+    private fun runtimeSummary(): String = if (packageManager.getLaunchIntentForPackage("com.winlator") != null) {
+        "RUNTIME DETECTED: Winlator appears to be installed."
+    } else {
+        "RUNTIME NOT DETECTED: Install Winlator to try running Windows apps."
+    }
+
+    private fun openInstallerInRuntime(file: File) {
+        val launch = packageManager.getLaunchIntentForPackage("com.winlator")
+        if (launch == null) {
+            AlertDialog.Builder(this)
+                .setTitle("Winlator not detected")
+                .setMessage("Install Winlator from its official releases page, open it once, then return here. In Winlator, create a container and use its file browser to locate/import the installer. Windows apps are not guaranteed to work on every Android device.")
+                .setNegativeButton("Close", null)
+                .setPositiveButton("Get Winlator") { _, _ -> openRuntimeGuide() }
+                .show()
+            return
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Open ${file.name} in Winlator")
+            .setMessage("WindowBridge cannot force Winlator to execute a private installer directly. You can open Winlator now, then use its file browser to locate or import the installer. If direct sharing is supported by your Winlator build, use the sharing button instead.")
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Open Winlator") { _, _ ->
+                try { startActivity(launch) } catch (_: Exception) { shareInstaller(file) }
+            }
+            .setNeutralButton("Try direct handoff") { _, _ -> sendToWinlator(file) }
+            .show()
+    }
+
+    private fun sendToWinlator(file: File) {
+        try {
+            val uri = FileProvider.getUriForFile(this, "$packageName.files", file)
+            val handoff = Intent(Intent.ACTION_SEND).apply {
+                type = "application/octet-stream"
+                putExtra(Intent.EXTRA_STREAM, uri)
+                clipData = android.content.ClipData.newUri(contentResolver, file.name, uri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                setPackage("com.winlator")
+            }
+            startActivity(handoff)
+            status.text = "Sent to Winlator. If it does not import the file, use Share with another app or open the installer from Winlator’s file browser."
+        } catch (_: Exception) {
+            status.text = "Winlator could not accept a direct installer handoff. Showing compatible apps instead."
+            shareInstaller(file)
+        }
+    }
+
+    private fun shareInstaller(file: File) {
         try {
             val uri = FileProvider.getUriForFile(this, "$packageName.files", file)
             val share = Intent(Intent.ACTION_SEND).apply {
