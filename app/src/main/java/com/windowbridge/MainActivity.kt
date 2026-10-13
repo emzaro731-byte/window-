@@ -47,7 +47,7 @@ class MainActivity : Activity() {
         }
 
         root.addView(label("WINDOWBRIDGE", 27f, 0xFFEAF2FF.toInt(), true), matchWrap())
-        root.addView(label("WINDOWS APP LIBRARY • v0.9.1", 12f, 0xFF79AFFF.toInt(), true).apply {
+        root.addView(label("WINDOWS APP LIBRARY • v0.9.2", 12f, 0xFF79AFFF.toInt(), true).apply {
             setPadding(0, dp(8), 0, dp(24))
         }, matchWrap())
 
