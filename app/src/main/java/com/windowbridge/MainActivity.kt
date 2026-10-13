@@ -74,7 +74,9 @@ class MainActivity : Activity() {
             setPadding(0, dp(18), 0, dp(12))
         }
         root.addView(status, matchWrap())
-        root.addView(label(runtimeSummary(), 13f, 0xFF9BE7C4.toInt(), false).apply {\n            setPadding(0, 0, 0, dp(10))\n        }, matchWrap())
+        root.addView(label(runtimeSummary(), 13f, 0xFF9BE7C4.toInt(), false).apply {
+            setPadding(0, 0, 0, dp(10))
+        }, matchWrap())
         root.addView(label("MY INSTALLERS", 13f, 0xFF91A7C7.toInt(), true).apply {
             setPadding(0, dp(8), 0, dp(8))
         }, matchWrap())
