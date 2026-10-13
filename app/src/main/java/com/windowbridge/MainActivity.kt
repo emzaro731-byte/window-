@@ -48,7 +48,7 @@ class MainActivity : Activity() {
         }
 
         root.addView(label("WINDOWBRIDGE", 27f, 0xFFEAF2FF.toInt(), true), matchWrap())
-        root.addView(label("WINDOWS APP LIBRARY • v0.9.6", 12f, 0xFF79AFFF.toInt(), true).apply {
+        root.addView(label("WINDOWS APP LIBRARY • v0.9.7", 12f, 0xFF79AFFF.toInt(), true).apply {
             setPadding(0, dp(8), 0, dp(24))
         }, matchWrap())
 
@@ -132,6 +132,10 @@ class MainActivity : Activity() {
             setPadding(0, dp(8), 0, dp(8))
         }
         root.addView(librarySummary, matchWrap())
+        root.addView(Button(this).apply {
+            text = "SCAN FOR DUPLICATE FILES"
+            setOnClickListener { scanForDuplicateInstallers() }
+        }, matchWrap())
 
         root.addView(Button(this).apply {
             text = "SORT: ${currentSortLabel()}  ↕"
@@ -617,6 +621,61 @@ class MainActivity : Activity() {
                     }.start()
                 }
             }
+    }
+
+    private fun scanForDuplicateInstallers() {
+        val folder = File(filesDir, "installers")
+        val files = folder.listFiles()?.filter { it.isFile } ?: emptyList()
+        if (files.size < 2) {
+            AlertDialog.Builder(this)
+                .setTitle("Duplicate scan")
+                .setMessage("Add at least two installers before scanning for duplicate content.")
+                .setPositiveButton("OK", null)
+                .show()
+            return
+        }
+        status.text = "Scanning ${files.size} installers for duplicate content…"
+        Thread {
+            val groups = linkedMapOf<String, MutableList<File>>()
+            var failureCount = 0
+            files.forEach { file ->
+                try {
+                    val digest = MessageDigest.getInstance("SHA-256")
+                    file.inputStream().buffered().use { input ->
+                        val buffer = ByteArray(64 * 1024)
+                        while (true) {
+                            val count = input.read(buffer)
+                            if (count < 0) break
+                            digest.update(buffer, 0, count)
+                        }
+                    }
+                    val hash = digest.digest().joinToString("") { "%02x".format(it) }
+                    groups.getOrPut(hash) { mutableListOf() }.add(file)
+                } catch (_: Exception) {
+                    failureCount++
+                }
+            }
+            val duplicates = groups.values.filter { it.size > 1 }
+            runOnUiThread {
+                status.text = "Duplicate scan complete: ${duplicates.size} duplicate group(s)."
+                val message = if (duplicates.isEmpty()) {
+                    "No identical files were found among ${files.size - failureCount} successfully checked installer(s)."
+                } else {
+                    duplicates.joinToString("\n\n") { group ->
+                        val size = android.text.format.Formatter.formatShortFileSize(this, group.first().length())
+                        "Identical content • $size each\n" + group.joinToString("\n") { "• ${it.name}" }
+                    } + "\n\nNo files were deleted."
+                }
+                val finalMessage = if (failureCount > 0) {
+                    "$message\n\nCould not check $failureCount file(s)."
+                } else message
+                AlertDialog.Builder(this)
+                    .setTitle("Duplicate scan results")
+                    .setMessage(finalMessage)
+                    .setPositiveButton("OK", null)
+                    .show()
+            }
+        }.start()
     }
 
     private fun calculateSha256(file: File) {
