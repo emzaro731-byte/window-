@@ -48,7 +48,7 @@ class MainActivity : Activity() {
         }
 
         root.addView(label("WINDOWBRIDGE", 27f, 0xFFEAF2FF.toInt(), true), matchWrap())
-        root.addView(label("WINDOWS APP LIBRARY • v0.9.5", 12f, 0xFF79AFFF.toInt(), true).apply {
+        root.addView(label("WINDOWS APP LIBRARY • v0.9.6", 12f, 0xFF79AFFF.toInt(), true).apply {
             setPadding(0, dp(8), 0, dp(24))
         }, matchWrap())
 
@@ -106,6 +106,13 @@ class MainActivity : Activity() {
             })
         }
         root.addView(searchField, matchWrap())
+        root.addView(Button(this).apply {
+            text = "CLEAR SEARCH"
+            setOnClickListener {
+                searchField?.setText("")
+                searchField?.clearFocus()
+            }
+        }, matchWrap())
 
         root.addView(Button(this).apply {
             text = "FILE TYPE: ${currentTypeLabel()}  ▾"
@@ -377,13 +384,13 @@ class MainActivity : Activity() {
         }
         val totalBytes = allFiles.sumOf { it.length() }
         val used = android.text.format.Formatter.formatShortFileSize(this, totalBytes)
-        librarySummary.text = "${allFiles.size} installer${if (allFiles.size == 1) "" else "s"} • ${used} used"
         val typedFiles = when (currentType()) {
             TYPE_EXE -> allFiles.filter { it.extension.equals("exe", ignoreCase = true) }
             TYPE_MSI -> allFiles.filter { it.extension.equals("msi", ignoreCase = true) }
             else -> allFiles
         }
         val files = if (query.isBlank()) typedFiles else typedFiles.filter { it.name.contains(query, ignoreCase = true) }
+        librarySummary.text = "Showing ${files.size} of ${allFiles.size} installers • ${used} total storage"
         if (files.isEmpty()) {
             val emptyMessage = when {
                 allFiles.isEmpty() -> "Your library is empty. Import an installer to get started."
