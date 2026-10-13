@@ -2,7 +2,12 @@
 
 WindowBridge is an Android project for managing Windows installer files and developing a standalone Windows compatibility layer.
 
-## Current version: v0.9.0 (development)
+## Current version: v0.9.1 (development)
+
+### Version 0.9.1 notes
+- Clarified that device readiness checks are advisory only and do not establish Windows-app compatibility.
+- Installer header checks only catch obvious file-format mismatches; they do not scan for malware.
+- Standalone Windows runtime remains a separate development milestone.
 
 - Dark navy Android interface.
 - Import and privately store Windows `.exe` and `.msi` files.
