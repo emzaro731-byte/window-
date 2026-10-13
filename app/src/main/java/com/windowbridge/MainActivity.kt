@@ -48,7 +48,7 @@ class MainActivity : Activity() {
         }
 
         root.addView(label("WINDOWBRIDGE", 27f, 0xFFEAF2FF.toInt(), true), matchWrap())
-        root.addView(label("WINDOWS APP LIBRARY • v0.9.9", 12f, 0xFF79AFFF.toInt(), true).apply {
+        root.addView(label("WINDOWS APP LIBRARY • v1.0.0", 12f, 0xFF79AFFF.toInt(), true).apply {
             setPadding(0, dp(8), 0, dp(24))
         }, matchWrap())
 
@@ -74,6 +74,10 @@ class MainActivity : Activity() {
             text = "RUNTIME STATUS / SETUP"
             setOnClickListener { showStandaloneRuntimeStatus() }
         }.apply { setPadding(0, dp(4), 0, dp(4)) }, matchWrap())
+        hero.addView(Button(this).apply {
+            text = "WINDOWS RUN MODES • LOCAL / ENGINE / REMOTE"
+            setOnClickListener { showRunModes() }
+        }, matchWrap())
         hero.addView(Button(this).apply {
             text = "CHECK DEVICE FOR HEAVY APPS"
             setOnClickListener { showDeviceReadiness() }
@@ -234,6 +238,108 @@ class MainActivity : Activity() {
             .setMessage(message)
             .setPositiveButton("OK", null)
             .show()
+    }
+
+    private fun showRunModes() {
+        val options = arrayOf(
+            "A. Built-in runtime (not ready)",
+            "B. Open an installed compatibility engine",
+            "C. Connect to a remote Windows desktop"
+        )
+        AlertDialog.Builder(this)
+            .setTitle("Choose how to run Windows apps")
+            .setItems(options) { _, which ->
+                when (which) {
+                    0 -> showStandaloneRuntimeStatus()
+                    1 -> openCompatibilityEngine()
+                    2 -> configureRemoteDesktop()
+                }
+            }
+            .setNegativeButton("Close", null)
+            .show()
+    }
+
+    private fun openCompatibilityEngine() {
+        val launch = packageManager.getLaunchIntentForPackage("com.winlator")
+        if (launch != null) {
+            try {
+                startActivity(launch)
+                status.text = "Opened Winlator. Use its own container and file browser to install or launch your app."
+            } catch (_: Exception) {
+                openRuntimeGuide()
+            }
+        } else {
+            AlertDialog.Builder(this)
+                .setTitle("No compatible engine detected")
+                .setMessage("WindowBridge can hand off to a compatible engine, but it cannot run Windows applications itself yet. You can review the official Winlator releases. This optional route requires a separate app and is not standalone integration.")
+                .setPositiveButton("Official releases") { _, _ -> openRuntimeGuide() }
+                .setNegativeButton("Cancel", null)
+                .show()
+        }
+    }
+
+    private fun configureRemoteDesktop() {
+        val prefs = getSharedPreferences(PREFS, MODE_PRIVATE)
+        val input = EditText(this).apply {
+            hint = "https://your-remote-desktop-gateway.example/"
+            setSingleLine(true)
+            setText(prefs.getString(KEY_REMOTE_URL, ""))
+            setSelectAllOnFocus(true)
+        }
+        val layout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(8), dp(20), dp(4))
+            addView(label(
+                "Enter the HTTPS address of a remote desktop web gateway that you control or trust (for example, a configured Apache Guacamole gateway). WindowBridge does not host a Windows PC. Do not enter passwords or private tokens in this URL.",
+                13f, 0xFFB5C6DF.toInt(), false
+            ), matchWrap())
+            addView(input, matchWrap())
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Remote Windows desktop")
+            .setView(layout)
+            .setNeutralButton("Forget address") { _, _ ->
+                prefs.edit().remove(KEY_REMOTE_URL).apply()
+                status.text = "Saved remote desktop address removed."
+            }
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Save") { _, _ ->
+                val raw = input.text.toString().trim()
+                if (raw.isEmpty()) {
+                    prefs.edit().remove(KEY_REMOTE_URL).apply()
+                    status.text = "Remote desktop address cleared."
+                    return@setPositiveButton
+                }
+                val parsed = try { java.net.URI(raw) } catch (_: Exception) { null }
+                if (parsed == null || parsed.scheme != "https" || parsed.host.isNullOrBlank() ||
+                    parsed.userInfo != null || parsed.fragment != null) {
+                    Toast.makeText(this, "Use a valid HTTPS gateway URL without embedded credentials or fragments.", Toast.LENGTH_LONG).show()
+                    return@setPositiveButton
+                }
+                prefs.edit().putString(KEY_REMOTE_URL, parsed.toASCIIString()).apply()
+                status.text = "Remote gateway address saved. Connect only to a gateway you trust."
+                AlertDialog.Builder(this)
+                    .setTitle("Remote gateway saved")
+                    .setMessage("WindowBridge will open this HTTPS gateway in your browser. The gateway must already be configured to provide remote desktop access; saving an address does not create a Windows computer or establish a session by itself.")
+                    .setPositiveButton("Connect") { _, _ -> openRemoteGateway(parsed.toASCIIString()) }
+                    .setNegativeButton("Later", null)
+                    .show()
+            }
+            .show()
+    }
+
+    private fun openRemoteGateway(savedUrl: String? = null) {
+        val url = savedUrl ?: getSharedPreferences(PREFS, MODE_PRIVATE).getString(KEY_REMOTE_URL, null)
+        if (url.isNullOrBlank()) {
+            configureRemoteDesktop()
+            return
+        }
+        try {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+            status.text = "Opened remote desktop gateway in your browser."
+        } catch (_: Exception) {
+            Toast.makeText(this, "No browser is available to open the remote gateway.", Toast.LENGTH_LONG).show()
+        }
     }
 
     private fun showStandaloneRuntimeStatus() {
@@ -830,6 +936,7 @@ class MainActivity : Activity() {
         private const val KEY_PROFILE = "compatibility_profile"
         private const val KEY_SORT = "installer_sort"
         private const val KEY_TYPE = "installer_type_filter"
+        private const val KEY_REMOTE_URL = "remote_desktop_gateway_url"
         private const val TYPE_ALL = "all"
         private const val TYPE_EXE = "exe"
         private const val TYPE_MSI = "msi"
