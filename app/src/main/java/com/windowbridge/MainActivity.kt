@@ -41,7 +41,7 @@ class MainActivity : Activity() {
         }
 
         root.addView(label("WINDOWBRIDGE", 27f, 0xFFEAF2FF.toInt(), true), matchWrap())
-        root.addView(label("WINDOWS APP LIBRARY • v0.2.0", 12f, 0xFF79AFFF.toInt(), true).apply {
+        root.addView(label("WINDOWS APP LIBRARY • v0.3.0", 12f, 0xFF79AFFF.toInt(), true).apply {
             setPadding(0, dp(8), 0, dp(24))
         }, matchWrap())
 
@@ -77,7 +77,7 @@ class MainActivity : Activity() {
         root.addView(library, matchWrap())
 
         root.addView(label(
-            "RUNTIME STATUS: EXTERNAL SETUP REQUIRED\nWindowBridge now supports secure sharing of saved installers. Windows programs still will not run inside WindowBridge until a compatible Wine/CPU-translation runtime is integrated. Sharing an installer does not guarantee that another app can accept it.",
+            "RUNTIME STATUS: EXTERNAL SETUP REQUIRED\nWindowBridge now supports secure sharing of saved installers. WindowBridge uses an external runtime handoff; it does not bundle Wine or CPU translation yet. Some runtime versions may not accept installer sharing directly.",
             12f, 0xFFFFD28A.toInt(), false
         ).apply { setPadding(0, dp(22), 0, 0) }, matchWrap())
 
@@ -180,7 +180,11 @@ class MainActivity : Activity() {
             }, matchWrap())
 
             card.addView(Button(this).apply {
-                text = "SHARE WITH COMPATIBLE RUNTIME"
+                text = "TRY SENDING TO WINLATOR"
+                setOnClickListener { sendToWinlator(file) }
+            }, matchWrap())
+            card.addView(Button(this).apply {
+                text = "SHARE WITH ANOTHER APP"
                 setOnClickListener { shareInstaller(file) }
             }, matchWrap())
 
@@ -198,7 +202,7 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun shareInstaller(file: File) {
+    private fun sendToWinlator(file: File) {\n        try {\n            val uri = FileProvider.getUriForFile(this, "$packageName.files", file)\n            val handoff = Intent(Intent.ACTION_SEND).apply {\n                type = "application/octet-stream"\n                putExtra(Intent.EXTRA_STREAM, uri)\n                clipData = android.content.ClipData.newUri(contentResolver, file.name, uri)\n                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)\n                setPackage("com.winlator")\n            }\n            startActivity(handoff)\n            status.text = "Sent to Winlator. If it does not import the file, use Share with another app or open the installer from Winlator’s file browser."\n        } catch (_: Exception) {\n            status.text = "Winlator could not accept a direct installer handoff. Showing compatible apps instead."\n            shareInstaller(file)\n        }\n    }\n\n    private fun shareInstaller(file: File) {
         try {
             val uri = FileProvider.getUriForFile(this, "$packageName.files", file)
             val share = Intent(Intent.ACTION_SEND).apply {
@@ -220,7 +224,7 @@ class MainActivity : Activity() {
         selectedInstaller = file
         AlertDialog.Builder(this)
             .setTitle(file.name)
-            .setMessage("Size: ${file.length()} bytes\nSaved privately inside WindowBridge.\n\nUse “Share with compatible runtime” to send a copy to another app. Windows execution inside WindowBridge is not yet available.")
+            .setMessage("Size: ${file.length()} bytes\nSaved privately inside WindowBridge.\n\nUse “Share with compatible runtime” to send a copy to another app. Window execution is handled by an external runtime, not inside WindowBridge.")
             .setPositiveButton("Share") { _, _ -> shareInstaller(file) }
             .setNegativeButton("Close", null)
             .setNeutralButton("Remove") { _, _ -> confirmDelete(file) }
