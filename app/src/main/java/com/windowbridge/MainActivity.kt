@@ -106,6 +106,20 @@ class MainActivity : Activity() {
         }
         root.addView(searchField, matchWrap())
 
+        root.addView(Button(this).apply {
+            text = "FILE TYPE: ${currentTypeLabel()}  ▾"
+            setOnClickListener {
+                val next = when (currentType()) {
+                    TYPE_ALL -> TYPE_EXE
+                    TYPE_EXE -> TYPE_MSI
+                    else -> TYPE_ALL
+                }
+                getSharedPreferences(PREFS, MODE_PRIVATE).edit().putString(KEY_TYPE, next).apply()
+                text = "FILE TYPE: ${currentTypeLabel()}  ▾"
+                refreshLibrary()
+            }
+        }, matchWrap())
+
         librarySummary = label("0 installers • 0 B used", 12f, 0xFF91A7C7.toInt(), false).apply {
             setPadding(0, dp(8), 0, dp(8))
         }
@@ -331,6 +345,15 @@ class MainActivity : Activity() {
         } catch (_: Exception) { null }
     }
 
+    private fun currentType(): String =
+        getSharedPreferences(PREFS, MODE_PRIVATE).getString(KEY_TYPE, TYPE_ALL) ?: TYPE_ALL
+
+    private fun currentTypeLabel(): String = when (currentType()) {
+        TYPE_EXE -> "EXE ONLY"
+        TYPE_MSI -> "MSI ONLY"
+        else -> "ALL INSTALLERS"
+    }
+
     private fun currentSort(): String =
         getSharedPreferences(PREFS, MODE_PRIVATE).getString(KEY_SORT, SORT_NEWEST) ?: SORT_NEWEST
 
@@ -354,7 +377,12 @@ class MainActivity : Activity() {
         val totalBytes = allFiles.sumOf { it.length() }
         val used = android.text.format.Formatter.formatShortFileSize(this, totalBytes)
         librarySummary.text = "${allFiles.size} installer${if (allFiles.size == 1) "" else "s"} • ${used} used"
-        val files = if (query.isBlank()) allFiles else allFiles.filter { it.name.contains(query, ignoreCase = true) }
+        val typedFiles = when (currentType()) {
+            TYPE_EXE -> allFiles.filter { it.extension.equals("exe", ignoreCase = true) }
+            TYPE_MSI -> allFiles.filter { it.extension.equals("msi", ignoreCase = true) }
+            else -> allFiles
+        }
+        val files = if (query.isBlank()) typedFiles else typedFiles.filter { it.name.contains(query, ignoreCase = true) }
         if (files.isEmpty()) {
             val emptyMessage = if (allFiles.isEmpty()) "Your library is empty. Import an installer to get started."
                 else "No saved installers match “$query”."
@@ -557,6 +585,10 @@ class MainActivity : Activity() {
         private const val PREFS = "windowbridge_settings"
         private const val KEY_PROFILE = "compatibility_profile"
         private const val KEY_SORT = "installer_sort"
+        private const val KEY_TYPE = "installer_type_filter"
+        private const val TYPE_ALL = "all"
+        private const val TYPE_EXE = "exe"
+        private const val TYPE_MSI = "msi"
         private const val SORT_NEWEST = "newest"
         private const val SORT_NAME = "name"
         private const val SORT_LARGEST = "largest"
