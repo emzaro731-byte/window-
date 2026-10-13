@@ -2,10 +2,11 @@
 
 WindowBridge is an Android project for managing Windows installer files and developing a standalone Windows compatibility layer.
 
-## Current version: v0.9.5 (development)
+## Current version: v0.9.6 (development)
 
 ### Version 0.9.5 notes
 - Added comparison against a publisher-provided SHA-256 fingerprint, with clear match/mismatch results.
+- Added a one-tap clear-search action and live visible-versus-total installer counts.
 - Kept fingerprint calculation off the UI thread and retained copy support.
 - Installer type filters (`.exe` / `.msi`) and persistent sorting remain available.
 
