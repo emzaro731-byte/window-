@@ -316,17 +316,17 @@ class MainActivity : Activity() {
         val file = File(File(filesDir, "installers"), name)
         if (file.exists()) {
             selectedInstaller = file
-            status.text = "Shortcut opened: ${file.name}. Choose Open Windows Runtime below."
+            status.text = "Shortcut opened: ${file.name}. Choose Install / Run Windows App below."
             showDetails(file)
         } else {
             status.text = "That installer is no longer in your library."
         }
     }
 
-    private fun runtimeSummary(): String = if (packageManager.getLaunchIntentForPackage("com.winlator") != null) {
-        "RUNTIME DETECTED: Winlator appears to be installed."
+    private fun runtimeSummary(): String = if (File(File(filesDir, "windows-runtime"), "runtime-ready").exists()) {
+        "STANDALONE ENGINE: Runtime marker detected; execution adapter still needs validation."
     } else {
-        "RUNTIME NOT DETECTED: Install Winlator to try running Windows apps."
+        "STANDALONE ENGINE: Not installed. Profiles are saved, but Windows programs cannot run yet."
     }
 
     private fun openInstallerInRuntime(file: File) {
