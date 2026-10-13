@@ -48,7 +48,7 @@ class MainActivity : Activity() {
         }
 
         root.addView(label("WINDOWBRIDGE", 27f, 0xFFEAF2FF.toInt(), true), matchWrap())
-        root.addView(label("WINDOWS APP LIBRARY • v0.9.4", 12f, 0xFF79AFFF.toInt(), true).apply {
+        root.addView(label("WINDOWS APP LIBRARY • v0.9.5", 12f, 0xFF79AFFF.toInt(), true).apply {
             setPadding(0, dp(8), 0, dp(24))
         }, matchWrap())
 
@@ -428,6 +428,10 @@ class MainActivity : Activity() {
                 text = "CALCULATE SHA-256 FINGERPRINT"
                 setOnClickListener { calculateSha256(file) }
             }, matchWrap())
+            card.addView(Button(this).apply {
+                text = "COMPARE WITH PUBLISHER HASH"
+                setOnClickListener { compareTrustedHash(file) }
+            }, matchWrap())
 
             val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
             actions.addView(Button(this@MainActivity).apply {
@@ -543,6 +547,69 @@ class MainActivity : Activity() {
             status.text = "Could not share installer: ${e.message ?: "unknown error"}"
             Toast.makeText(this, "Sharing failed", Toast.LENGTH_SHORT).show()
         }
+    }
+
+    private fun compareTrustedHash(file: File) {
+        val input = EditText(this).apply {
+            hint = "Paste trusted SHA-256 (64 hex characters)"
+            setSingleLine(true)
+            setTextColor(0xFFEAF2FF.toInt())
+            setHintTextColor(0xFF8194B2.toInt())
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Compare publisher fingerprint")
+            .setMessage("Get the expected SHA-256 from the software publisher's official website. WindowBridge will compare it with this saved file.")
+            .setView(input)
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Compare", null)
+            .show().also { dialog ->
+                dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                    val expected = input.text.toString().trim().lowercase()
+                    if (!expected.matches(Regex("[a-f0-9]{64}"))) {
+                        input.error = "Enter exactly 64 hexadecimal characters"
+                        return@setOnClickListener
+                    }
+                    dialog.dismiss()
+                    status.text = "Comparing publisher fingerprint for ${file.name}…"
+                    Thread {
+                        val actual = try {
+                            val digest = MessageDigest.getInstance("SHA-256")
+                            file.inputStream().buffered().use { stream ->
+                                val buffer = ByteArray(64 * 1024)
+                                while (true) {
+                                    val count = stream.read(buffer)
+                                    if (count < 0) break
+                                    digest.update(buffer, 0, count)
+                                }
+                            }
+                            digest.digest().joinToString("") { "%02x".format(it) }
+                        } catch (e: Exception) {
+                            "ERROR: ${e.message ?: "unable to read file"}"
+                        }
+                        runOnUiThread {
+                            val matches = actual == expected
+                            status.text = when {
+                                actual.startsWith("ERROR:") -> "Could not compare publisher fingerprint."
+                                matches -> "SHA-256 MATCH: ${file.name}"
+                                else -> "SHA-256 MISMATCH: ${file.name}"
+                            }
+                            AlertDialog.Builder(this)
+                                .setTitle(when {
+                                    actual.startsWith("ERROR:") -> "Comparison failed"
+                                    matches -> "Fingerprint matches"
+                                    else -> "Fingerprint does not match"
+                                })
+                                .setMessage(when {
+                                    actual.startsWith("ERROR:") -> actual.removePrefix("ERROR: ")
+                                    matches -> "The file matches the expected SHA-256 value. This confirms file identity only; it does not prove the software is harmless."
+                                    else -> "Do not run this file if you expected a match. Check that the expected hash came from the publisher's official source and that you downloaded the correct file.\n\nActual SHA-256:\n$actual"
+                                })
+                                .setPositiveButton("OK", null)
+                                .show()
+                        }
+                    }.start()
+                }
+            }
     }
 
     private fun calculateSha256(file: File) {
