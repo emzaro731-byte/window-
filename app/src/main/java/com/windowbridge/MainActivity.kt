@@ -42,7 +42,7 @@ class MainActivity : Activity() {
         }
 
         root.addView(label("WINDOWBRIDGE", 27f, 0xFFEAF2FF.toInt(), true), matchWrap())
-        root.addView(label("WINDOWS APP LIBRARY • v0.6.0", 12f, 0xFF79AFFF.toInt(), true).apply {
+        root.addView(label("WINDOWS APP LIBRARY • v0.7.0", 12f, 0xFF79AFFF.toInt(), true).apply {
             setPadding(0, dp(8), 0, dp(24))
         }, matchWrap())
 
@@ -167,16 +167,13 @@ class MainActivity : Activity() {
     }
 
     private fun showStandaloneRuntimeStatus() {
-        val runtimeDir = File(filesDir, "windows-runtime")
-        val marker = File(runtimeDir, "runtime-ready")
-        val ready = marker.exists()
         AlertDialog.Builder(this)
-            .setTitle(if (ready) "Windows engine detected" else "Standalone Windows engine not installed")
+            .setTitle("Standalone Windows engine not installed")
             .setMessage(
-                if (ready) "A runtime marker exists in app storage. Actual program compatibility still depends on the runtime components and device."
-                else "Your selected profile is saved, but this version does not include Wine, CPU translation, or graphics runtime components. Therefore it cannot yet install or run .EXE/.MSI files by itself. The profile selector is preparation only; it does not install an engine or use Winlator automatically."
+                "WindowBridge does not yet include a verified Windows runtime. A marker file or selected profile is not enough to prove that Wine, CPU translation, graphics/audio components, and the installer launcher are working. The engine must be integrated and tested before .EXE/.MSI files can run here."
             )
-            .setPositiveButton("OK", null)
+            .setPositiveButton("Runtime integration plan") { _, _ -> openRuntimeGuide() }
+            .setNegativeButton("Close", null)
             .show()
     }
 
