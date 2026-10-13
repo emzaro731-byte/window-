@@ -22,6 +22,7 @@ import java.io.IOException
 class MainActivity : Activity() {
     private lateinit var status: TextView
     private lateinit var library: LinearLayout
+    private lateinit var librarySummary: TextView
     private var selectedInstaller: File? = null
     private var searchField: EditText? = null
 
@@ -104,6 +105,11 @@ class MainActivity : Activity() {
             })
         }
         root.addView(searchField, matchWrap())
+
+        librarySummary = label("0 installers • 0 B used", 12f, 0xFF91A7C7.toInt(), false).apply {
+            setPadding(0, dp(8), 0, dp(8))
+        }
+        root.addView(librarySummary, matchWrap())
 
         library = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         root.addView(library, matchWrap())
@@ -244,6 +250,17 @@ class MainActivity : Activity() {
         }
 
         val folder = File(filesDir, "installers").apply { mkdirs() }
+        val estimatedSize = try {
+            contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.SIZE), null, null, null)?.use {
+                if (it.moveToFirst() && !it.isNull(0)) it.getLong(0) else -1L
+            } ?: -1L
+        } catch (_: Exception) { -1L }
+        val availableBytes = android.os.StatFs(filesDir.absolutePath).availableBytes
+        if (estimatedSize >= 0 && estimatedSize > availableBytes) {
+            status.text = "Import stopped: not enough free storage."
+            Toast.makeText(this, "This installer is larger than the available internal storage.", Toast.LENGTH_LONG).show()
+            return
+        }
         var target = File(folder, safeName)
         if (target.exists()) target = File(folder, "${target.nameWithoutExtension}-${System.currentTimeMillis()}.$extension")
 
@@ -270,7 +287,16 @@ class MainActivity : Activity() {
                 }
                 target.outputStream().use { output ->
                     output.write(signature, 0, read)
-                    input.copyTo(output)
+                    val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                    while (true) {
+                        val count = input.read(buffer)
+                        if (count < 0) break
+                        val remaining = android.os.StatFs(filesDir.absolutePath).availableBytes
+                        if (count.toLong() > remaining) {
+                            throw IOException("Storage became full while importing. Free space and try again.")
+                        }
+                        output.write(buffer, 0, count)
+                    }
                 }
             }
             selectedInstaller = target
@@ -297,6 +323,9 @@ class MainActivity : Activity() {
         val folder = File(filesDir, "installers")
         val query = searchField?.text?.toString()?.trim().orEmpty()
         val allFiles = folder.listFiles()?.filter { it.isFile }?.sortedByDescending { it.lastModified() } ?: emptyList()
+        val totalBytes = allFiles.sumOf { it.length() }
+        val used = android.text.format.Formatter.formatShortFileSize(this, totalBytes)
+        librarySummary.text = "${allFiles.size} installer${if (allFiles.size == 1) "" else "s"} • ${used} used"
         val files = if (query.isBlank()) allFiles else allFiles.filter { it.name.contains(query, ignoreCase = true) }
         if (files.isEmpty()) {
             val emptyMessage = if (allFiles.isEmpty()) "Your library is empty. Import an installer to get started."
