@@ -2,10 +2,11 @@
 
 WindowBridge is an Android project for managing Windows installer files and developing a standalone Windows compatibility layer.
 
-## Current version: v0.9.2 (development)
+## Current version: v0.9.3 (development)
 
-### Version 0.9.2 notes
-- Added a persistent installer-library sort control: newest first, name A–Z, or largest files first.
+### Version 0.9.3 notes
+- Added installer type filters: show all files, `.exe` only, or `.msi` only.
+- Retained the persistent sort control: newest first, name A–Z, or largest files first.
 
 ### Version 0.9.1 notes
 - Clarified that device readiness checks are advisory only and do not establish Windows-app compatibility.
