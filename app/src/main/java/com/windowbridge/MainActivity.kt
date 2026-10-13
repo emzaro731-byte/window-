@@ -12,11 +12,11 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
+import androidx.core.content.FileProvider
 import java.io.File
 import java.io.IOException
 
 class MainActivity : Activity() {
-    private lateinit var root: LinearLayout
     private lateinit var status: TextView
     private lateinit var library: LinearLayout
     private var selectedInstaller: File? = null
@@ -34,14 +34,14 @@ class MainActivity : Activity() {
     }
 
     private fun render() {
-        root = LinearLayout(this).apply {
+        val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(22), dp(32), dp(22), dp(28))
             setBackgroundColor(0xFF070B14.toInt())
         }
 
         root.addView(label("WINDOWBRIDGE", 27f, 0xFFEAF2FF.toInt(), true), matchWrap())
-        root.addView(label("YOUR WINDOWS APP LIBRARY", 12f, 0xFF79AFFF.toInt(), true).apply {
+        root.addView(label("WINDOWS APP LIBRARY • v0.2.0", 12f, 0xFF79AFFF.toInt(), true).apply {
             setPadding(0, dp(8), 0, dp(24))
         }, matchWrap())
 
@@ -50,14 +50,19 @@ class MainActivity : Activity() {
             setPadding(dp(18), dp(18), dp(18), dp(18))
             setBackgroundColor(0xFF111C2D.toInt())
         }
-        hero.addView(label("Bring an installer into your library", 18f, 0xFFEAF2FF.toInt(), false), matchWrap())
-        hero.addView(label("Select an .EXE or .MSI file stored on your phone. WindowBridge will keep a private copy so it remains in the library.", 14f, 0xFFB5C6DF.toInt(), false).apply {
-            setPadding(0, dp(10), 0, dp(16))
-        }, matchWrap())
+        hero.addView(label("Manage Windows installers", 18f, 0xFFEAF2FF.toInt(), false), matchWrap())
+        hero.addView(label(
+            "Import an .EXE or .MSI file. WindowBridge saves a private copy and lets you share it with a compatible runtime app.",
+            14f, 0xFFB5C6DF.toInt(), false
+        ).apply { setPadding(0, dp(10), 0, dp(16)) }, matchWrap())
         hero.addView(Button(this).apply {
             text = "＋  IMPORT INSTALLER"
             setOnClickListener { openPicker() }
         }, matchWrap())
+        hero.addView(Button(this).apply {
+            text = "SET UP WINDOWS RUNTIME"
+            setOnClickListener { openRuntimeGuide() }
+        }.apply { setPadding(0, dp(4), 0, dp(4)) }, matchWrap())
         root.addView(hero, matchWrap())
 
         status = label("Ready. No installer selected.", 14f, 0xFF8FC5FF.toInt(), false).apply {
@@ -72,7 +77,7 @@ class MainActivity : Activity() {
         root.addView(library, matchWrap())
 
         root.addView(label(
-            "Runtime status: NOT INSTALLED\nThis version imports and stores installers only. Windows programs cannot run until a compatible Wine/CPU-translation runtime is integrated. Importing a file does not install or execute it.",
+            "RUNTIME STATUS: EXTERNAL SETUP REQUIRED\nWindowBridge now supports secure sharing of saved installers. Windows programs still will not run inside WindowBridge until a compatible Wine/CPU-translation runtime is integrated. Sharing an installer does not guarantee that another app can accept it.",
             12f, 0xFFFFD28A.toInt(), false
         ).apply { setPadding(0, dp(22), 0, 0) }, matchWrap())
 
@@ -87,6 +92,15 @@ class MainActivity : Activity() {
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
         startActivityForResult(picker, REQUEST_PICK_FILE)
+    }
+
+    private fun openRuntimeGuide() {
+        val url = Uri.parse("https://github.com/brunodev85/winlator/releases")
+        try {
+            startActivity(Intent(Intent.ACTION_VIEW, url))
+        } catch (_: Exception) {
+            Toast.makeText(this, "Open the official Winlator releases page in your browser.", Toast.LENGTH_LONG).show()
+        }
     }
 
     @Deprecated("Document picker callback")
@@ -161,9 +175,15 @@ class MainActivity : Activity() {
             }
             card.addView(label(file.name, 15f, 0xFFEAF2FF.toInt(), false), matchWrap())
             val sizeMb = file.length().toDouble() / (1024.0 * 1024.0)
-            card.addView(label(String.format("%.2f MB • Saved on this device", sizeMb), 12f, 0xFF91A7C7.toInt(), false).apply {
+            card.addView(label(String.format("%.2f MB • Saved privately", sizeMb), 12f, 0xFF91A7C7.toInt(), false).apply {
                 setPadding(0, dp(6), 0, dp(10))
             }, matchWrap())
+
+            card.addView(Button(this).apply {
+                text = "SHARE WITH COMPATIBLE RUNTIME"
+                setOnClickListener { shareInstaller(file) }
+            }, matchWrap())
+
             val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
             actions.addView(Button(this@MainActivity).apply {
                 text = "Details"
@@ -174,8 +194,25 @@ class MainActivity : Activity() {
                 setOnClickListener { confirmDelete(file) }
             }, LinearLayout.LayoutParams(0, dp(48), 1f))
             card.addView(actions, matchWrap())
-            val params = matchWrap().apply { bottomMargin = dp(10) }
-            library.addView(card, params)
+            library.addView(card, matchWrap().apply { bottomMargin = dp(10) })
+        }
+    }
+
+    private fun shareInstaller(file: File) {
+        try {
+            val uri = FileProvider.getUriForFile(this, "$packageName.files", file)
+            val share = Intent(Intent.ACTION_SEND).apply {
+                type = "application/octet-stream"
+                putExtra(Intent.EXTRA_STREAM, uri)
+                clipData = android.content.ClipData.newUri(contentResolver, file.name, uri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            selectedInstaller = file
+            startActivity(Intent.createChooser(share, "Send installer to a compatible app"))
+            status.text = "Choose an app that can accept this installer."
+        } catch (e: Exception) {
+            status.text = "Could not share installer: ${e.message ?: "unknown error"}"
+            Toast.makeText(this, "Sharing failed", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -183,8 +220,9 @@ class MainActivity : Activity() {
         selectedInstaller = file
         AlertDialog.Builder(this)
             .setTitle(file.name)
-            .setMessage("Size: ${file.length()} bytes\nSaved privately inside WindowBridge.\n\nRunning this installer is not available yet because the Windows compatibility runtime has not been integrated.")
-            .setPositiveButton("OK", null)
+            .setMessage("Size: ${file.length()} bytes\nSaved privately inside WindowBridge.\n\nUse “Share with compatible runtime” to send a copy to another app. Windows execution inside WindowBridge is not yet available.")
+            .setPositiveButton("Share") { _, _ -> shareInstaller(file) }
+            .setNegativeButton("Close", null)
             .setNeutralButton("Remove") { _, _ -> confirmDelete(file) }
             .show()
     }
