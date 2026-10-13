@@ -2,7 +2,12 @@
 
 WindowBridge is an Android project for managing Windows installer files and developing a standalone Windows compatibility layer.
 
-## Current version: v0.9.8 (development)
+## Current version: v1.0.0 (development)
+
+### Version 1.0.0 notes
+- Added a run-modes menu for built-in runtime status, optional handoff to an installed Winlator app, and remote desktop gateway setup.
+- Remote gateway addresses are saved locally and must use HTTPS; WindowBridge opens the configured gateway in the browser but does not host a Windows machine or create a remote session.
+- The built-in Wine/CPU-translation runtime is still not bundled, so standalone local Windows execution is not yet available.
 
 ### Version 0.9.8 notes
 - Added CSV export of the installer inventory, including file name, type, size, and modified date.
