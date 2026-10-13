@@ -8,10 +8,13 @@ import android.os.Bundle
 import android.view.Gravity
 import android.view.ViewGroup
 import android.widget.Button
+import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
+import android.text.Editable
+import android.text.TextWatcher
 import androidx.core.content.FileProvider
 import java.io.File
 import java.io.IOException
@@ -20,6 +23,7 @@ class MainActivity : Activity() {
     private lateinit var status: TextView
     private lateinit var library: LinearLayout
     private var selectedInstaller: File? = null
+    private var searchField: EditText? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -84,6 +88,22 @@ class MainActivity : Activity() {
         root.addView(label("MY INSTALLERS", 13f, 0xFF91A7C7.toInt(), true).apply {
             setPadding(0, dp(8), 0, dp(8))
         }, matchWrap())
+
+        searchField = EditText(this).apply {
+            hint = "Search saved installers…"
+            setSingleLine(true)
+            setTextColor(0xFFEAF2FF.toInt())
+            setHintTextColor(0xFF8194B2.toInt())
+            setPadding(dp(12), dp(8), dp(12), dp(8))
+            addTextChangedListener(object : TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                    refreshLibrary()
+                }
+                override fun afterTextChanged(s: Editable?) = Unit
+            })
+        }
+        root.addView(searchField, matchWrap())
 
         library = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         root.addView(library, matchWrap())
@@ -178,22 +198,13 @@ class MainActivity : Activity() {
     }
 
     private fun installOrRunWindowsApp(file: File) {
-        val marker = File(File(filesDir, "windows-runtime"), "runtime-ready")
-        if (!marker.exists()) {
-            AlertDialog.Builder(this)
-                .setTitle("Windows engine required")
-                .setMessage(
-                    "${file.name} is saved, but WindowBridge does not yet contain its own Windows compatibility engine. The ${currentProfileLabel()} profile is only a preference and cannot execute the installer. To meet your request to work without Winlator, Wine and the required CPU/graphics components must first be integrated into this project."
-                )
-                .setPositiveButton("Runtime status") { _, _ -> showStandaloneRuntimeStatus() }
-                .setNegativeButton("Close", null)
-                .show()
-            return
-        }
         AlertDialog.Builder(this)
-            .setTitle("Runtime integration incomplete")
-            .setMessage("A runtime marker was found, but automatic installation and launching are not enabled until the runtime adapter is implemented and validated.")
-            .setPositiveButton("OK", null)
+            .setTitle("Windows engine required")
+            .setMessage(
+                "${file.name} is saved, but WindowBridge does not yet contain a verified Windows compatibility engine. The ${currentProfileLabel()} profile is only a preference and cannot execute the installer. Wine, CPU translation, graphics/audio components, and a working launcher must be integrated and tested first."
+            )
+            .setPositiveButton("Runtime status") { _, _ -> showStandaloneRuntimeStatus() }
+            .setNegativeButton("Close", null)
             .show()
     }
 
@@ -239,7 +250,28 @@ class MainActivity : Activity() {
         try {
             contentResolver.openInputStream(uri).use { input ->
                 if (input == null) throw IOException("Android could not open this file")
-                target.outputStream().use { output -> input.copyTo(output) }
+                val signature = ByteArray(8)
+                var read = 0
+                while (read < signature.size) {
+                    val count = input.read(signature, read, signature.size - read)
+                    if (count <= 0) break
+                    read += count
+                }
+                val validSignature = when (extension) {
+                    "exe" -> read >= 2 && signature[0] == 0x4D.toByte() && signature[1] == 0x5A.toByte()
+                    "msi" -> read >= 8 && signature.contentEquals(
+                        byteArrayOf(0xD0.toByte(), 0xCF.toByte(), 0x11.toByte(), 0xE0.toByte(),
+                            0xA1.toByte(), 0xB1.toByte(), 0x1A.toByte(), 0xE1.toByte())
+                    )
+                    else -> false
+                }
+                if (!validSignature) {
+                    throw IOException("The file extension is .$extension, but its header does not look like a Windows installer. Choose the original, complete file.")
+                }
+                target.outputStream().use { output ->
+                    output.write(signature, 0, read)
+                    input.copyTo(output)
+                }
             }
             selectedInstaller = target
             status.text = "Imported successfully: ${target.name}"
@@ -263,9 +295,13 @@ class MainActivity : Activity() {
         if (!::library.isInitialized) return
         library.removeAllViews()
         val folder = File(filesDir, "installers")
-        val files = folder.listFiles()?.filter { it.isFile }?.sortedByDescending { it.lastModified() } ?: emptyList()
+        val query = searchField?.text?.toString()?.trim().orEmpty()
+        val allFiles = folder.listFiles()?.filter { it.isFile }?.sortedByDescending { it.lastModified() } ?: emptyList()
+        val files = if (query.isBlank()) allFiles else allFiles.filter { it.name.contains(query, ignoreCase = true) }
         if (files.isEmpty()) {
-            library.addView(label("Your library is empty. Import an installer to get started.", 14f, 0xFF91A7C7.toInt(), false).apply {
+            val emptyMessage = if (allFiles.isEmpty()) "Your library is empty. Import an installer to get started."
+                else "No saved installers match “$query”."
+            library.addView(label(emptyMessage, 14f, 0xFF91A7C7.toInt(), false).apply {
                 setPadding(0, dp(12), 0, dp(12))
             }, matchWrap())
             return
@@ -355,11 +391,8 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun runtimeSummary(): String = if (File(File(filesDir, "windows-runtime"), "runtime-ready").exists()) {
-        "STANDALONE ENGINE: Runtime marker detected; execution adapter still needs validation."
-    } else {
+    private fun runtimeSummary(): String =
         "STANDALONE ENGINE: Not installed. Profiles are saved, but Windows programs cannot run yet."
-    }
 
     private fun openInstallerInRuntime(file: File) {
         val launch = packageManager.getLaunchIntentForPackage("com.winlator")
@@ -423,7 +456,7 @@ class MainActivity : Activity() {
         selectedInstaller = file
         AlertDialog.Builder(this)
             .setTitle(file.name)
-            .setMessage("Size: ${file.length()} bytes\nSaved privately inside WindowBridge.\n\nUse “Share with compatible runtime” to send a copy to another app. Window execution is handled by an external runtime, not inside WindowBridge.")
+            .setMessage("Size: ${android.text.format.Formatter.formatShortFileSize(this, file.length())}\nModified: ${java.text.DateFormat.getDateTimeInstance().format(java.util.Date(file.lastModified()))}\nSaved privately inside WindowBridge.\n\nThe file header was checked during import, but that does not prove the installer is safe or compatible. WindowBridge cannot execute it until a real Windows runtime is integrated.")
             .setPositiveButton("Share") { _, _ -> shareInstaller(file) }
             .setNegativeButton("Close", null)
             .setNeutralButton("Remove") { _, _ -> confirmDelete(file) }
