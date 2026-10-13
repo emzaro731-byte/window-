@@ -48,7 +48,7 @@ class MainActivity : Activity() {
         }
 
         root.addView(label("WINDOWBRIDGE", 27f, 0xFFEAF2FF.toInt(), true), matchWrap())
-        root.addView(label("WINDOWS APP LIBRARY • v0.9.8", 12f, 0xFF79AFFF.toInt(), true).apply {
+        root.addView(label("WINDOWS APP LIBRARY • v0.9.9", 12f, 0xFF79AFFF.toInt(), true).apply {
             setPadding(0, dp(8), 0, dp(24))
         }, matchWrap())
 
@@ -671,8 +671,13 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun csvEscape(value: String): String =
-        "\"" + value.replace("\"", "\"\"") + "\""
+    private fun csvEscape(value: String): String {
+        // Prevent spreadsheet formula injection from filenames or metadata.
+        val safeValue = if (value.isNotEmpty() && value.first() in charArrayOf('=', '+', '-', '@', '\t', '\r')) {
+            "'$value"
+        } else value
+        return "\"" + safeValue.replace("\"", "\"\"") + "\""
+    }
 
     private fun scanForDuplicateInstallers() {
         val folder = File(filesDir, "installers")
