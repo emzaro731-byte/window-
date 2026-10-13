@@ -68,6 +68,10 @@ class MainActivity : Activity() {
             text = "RUNTIME STATUS / SETUP"
             setOnClickListener { showStandaloneRuntimeStatus() }
         }.apply { setPadding(0, dp(4), 0, dp(4)) }, matchWrap())
+        hero.addView(Button(this).apply {
+            text = "CHECK DEVICE FOR HEAVY APPS"
+            setOnClickListener { showDeviceReadiness() }
+        }, matchWrap())
         root.addView(hero, matchWrap())
 
         status = label("Ready. No installer selected.", 14f, 0xFF8FC5FF.toInt(), false).apply {
@@ -128,6 +132,37 @@ class MainActivity : Activity() {
                 dialog.dismiss()
             }
             .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun showDeviceReadiness() {
+        val activityManager = getSystemService(ACTIVITY_SERVICE) as android.app.ActivityManager
+        val memory = android.app.ActivityManager.MemoryInfo()
+        activityManager.getMemoryInfo(memory)
+        val stat = android.os.StatFs(filesDir.absolutePath)
+        val freeGb = stat.availableBytes / (1024.0 * 1024.0 * 1024.0)
+        val totalRamGb = memory.totalMem / (1024.0 * 1024.0 * 1024.0)
+        val availableRamGb = memory.availMem / (1024.0 * 1024.0 * 1024.0)
+        val abis = android.os.Build.SUPPORTED_ABIS.joinToString()
+        val is64Bit = android.os.Process.is64Bit()
+        val assessment = when {
+            !is64Bit -> "LIMITED: this Android process is 32-bit. Many modern Windows games need a 64-bit runtime."
+            totalRamGb < 4.0 -> "LOW MEMORY: lightweight Windows apps are the realistic first target. Heavy games may fail or crash."
+            freeGb < 8.0 -> "LOW STORAGE: free space before attempting a large runtime or game. Installers and game data can be very large."
+            totalRamGb < 6.0 -> "BASIC / MIXED: some older PC apps may be possible with a compatible engine; demanding games remain uncertain."
+            else -> "BETTER STARTING POINT: hardware alone does not guarantee compatibility. A working Wine/CPU/graphics runtime is still required."
+        }
+        val message = "Android: ${android.os.Build.VERSION.RELEASE} (API ${android.os.Build.VERSION.SDK_INT})\n" +
+            "Supported CPU ABIs: $abis\n" +
+            "64-bit app process: $is64Bit\n" +
+            "Total RAM: %.1f GB\nAvailable RAM now: %.1f GB\nFree internal storage: %.1f GB\n\n%s\n\n".format(
+                totalRamGb, availableRamGb, freeGb, assessment
+            ) +
+            "Important: this is a hardware check only. WindowBridge still does not contain the Windows runtime needed to install or run .EXE/.MSI files. Heavy games can require substantial RAM, storage, compatible graphics, and x86-to-ARM translation."
+        AlertDialog.Builder(this)
+            .setTitle("Device readiness for PC apps")
+            .setMessage(message)
+            .setPositiveButton("OK", null)
             .show()
     }
 
