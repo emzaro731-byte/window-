@@ -42,7 +42,7 @@ class MainActivity : Activity() {
         }
 
         root.addView(label("WINDOWBRIDGE", 27f, 0xFFEAF2FF.toInt(), true), matchWrap())
-        root.addView(label("WINDOWS APP LIBRARY • v0.5.0", 12f, 0xFF79AFFF.toInt(), true).apply {
+        root.addView(label("WINDOWS APP LIBRARY • v0.6.0", 12f, 0xFF79AFFF.toInt(), true).apply {
             setPadding(0, dp(8), 0, dp(24))
         }, matchWrap())
 
@@ -53,7 +53,7 @@ class MainActivity : Activity() {
         }
         hero.addView(label("Manage Windows installers", 18f, 0xFFEAF2FF.toInt(), false), matchWrap())
         hero.addView(label(
-            "Import an .EXE or .MSI file. WindowBridge saves a private copy and lets you share it with a compatible runtime app.",
+            "Import a Windows .EXE or .MSI, choose a compatibility profile, and manage installers here. A standalone Windows engine is not bundled yet.",
             14f, 0xFFB5C6DF.toInt(), false
         ).apply { setPadding(0, dp(10), 0, dp(16)) }, matchWrap())
         hero.addView(Button(this).apply {
@@ -61,8 +61,12 @@ class MainActivity : Activity() {
             setOnClickListener { openPicker() }
         }, matchWrap())
         hero.addView(Button(this).apply {
-            text = "SET UP WINDOWS RUNTIME"
-            setOnClickListener { openRuntimeGuide() }
+            text = "COMPATIBILITY PROFILE: ${currentProfileLabel()}"
+            setOnClickListener { chooseCompatibilityProfile() }
+        }, matchWrap())
+        hero.addView(Button(this).apply {
+            text = "RUNTIME STATUS / SETUP"
+            setOnClickListener { showStandaloneRuntimeStatus() }
         }.apply { setPadding(0, dp(4), 0, dp(4)) }, matchWrap())
         root.addView(hero, matchWrap())
 
@@ -79,7 +83,7 @@ class MainActivity : Activity() {
         root.addView(library, matchWrap())
 
         root.addView(label(
-            "RUNTIME STATUS: EXTERNAL SETUP REQUIRED\nWindowBridge now supports secure sharing of saved installers. WindowBridge uses an external runtime handoff; it does not bundle Wine or CPU translation yet. Some runtime versions may not accept installer sharing directly.",
+            "STANDALONE ENGINE: NOT INSTALLED\nThe Auto profile chooses a suggested setup, but WindowBridge cannot run Windows programs until a compatible engine is bundled. No installer is executed by this app yet.",
             12f, 0xFFFFD28A.toInt(), false
         ).apply { setPadding(0, dp(22), 0, 0) }, matchWrap())
 
@@ -94,6 +98,69 @@ class MainActivity : Activity() {
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
         startActivityForResult(picker, REQUEST_PICK_FILE)
+    }
+
+    private fun currentProfile(): String =
+        getSharedPreferences(PREFS, MODE_PRIVATE).getString(KEY_PROFILE, PROFILE_AUTO) ?: PROFILE_AUTO
+
+    private fun currentProfileLabel(): String = when (currentProfile()) {
+        PROFILE_LIGHT -> "LIGHTWEIGHT"
+        PROFILE_GAMES -> "PC & GAMES"
+        else -> "AUTO"
+    }
+
+    private fun chooseCompatibilityProfile() {
+        val options = arrayOf(
+            "Auto — choose settings based on the program",
+            "Lightweight — older / simpler Windows apps",
+            "PC & games — demanding apps and games"
+        )
+        val values = arrayOf(PROFILE_AUTO, PROFILE_LIGHT, PROFILE_GAMES)
+        val selected = values.indexOf(currentProfile()).coerceAtLeast(0)
+        AlertDialog.Builder(this)
+            .setTitle("Compatibility profile")
+            .setSingleChoiceItems(options, selected) { dialog, which ->
+                getSharedPreferences(PREFS, MODE_PRIVATE).edit().putString(KEY_PROFILE, values[which]).apply()
+                status.text = "Profile selected: ${options[which].substringBefore(" —")}. This is a preference only; no Windows engine is bundled yet."
+                render()
+                dialog.dismiss()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun showStandaloneRuntimeStatus() {
+        val runtimeDir = File(filesDir, "windows-runtime")
+        val marker = File(runtimeDir, "runtime-ready")
+        val ready = marker.exists()
+        AlertDialog.Builder(this)
+            .setTitle(if (ready) "Windows engine detected" else "Standalone Windows engine not installed")
+            .setMessage(
+                if (ready) "A runtime marker exists in app storage. Actual program compatibility still depends on the runtime components and device."
+                else "Your selected profile is saved, but this version does not include Wine, CPU translation, or graphics runtime components. Therefore it cannot yet install or run .EXE/.MSI files by itself. The profile selector is preparation only; it does not install an engine or use Winlator automatically."
+            )
+            .setPositiveButton("OK", null)
+            .show()
+    }
+
+    private fun installOrRunWindowsApp(file: File) {
+        val marker = File(File(filesDir, "windows-runtime"), "runtime-ready")
+        if (!marker.exists()) {
+            AlertDialog.Builder(this)
+                .setTitle("Windows engine required")
+                .setMessage(
+                    "${file.name} is saved, but WindowBridge does not yet contain its own Windows compatibility engine. The ${currentProfileLabel()} profile is only a preference and cannot execute the installer. To meet your request to work without Winlator, Wine and the required CPU/graphics components must first be integrated into this project."
+                )
+                .setPositiveButton("Runtime status") { _, _ -> showStandaloneRuntimeStatus() }
+                .setNegativeButton("Close", null)
+                .show()
+            return
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Runtime integration incomplete")
+            .setMessage("A runtime marker was found, but automatic installation and launching are not enabled until the runtime adapter is implemented and validated.")
+            .setPositiveButton("OK", null)
+            .show()
     }
 
     private fun openRuntimeGuide() {
@@ -187,11 +254,11 @@ class MainActivity : Activity() {
             }, matchWrap())
 
             card.addView(Button(this).apply {
-                text = "OPEN WINDOWS RUNTIME"
-                setOnClickListener { openInstallerInRuntime(file) }
+                text = "INSTALL / RUN WINDOWS APP"
+                setOnClickListener { installOrRunWindowsApp(file) }
             }, matchWrap())
             card.addView(Button(this).apply {
-                text = "TRY SENDING TO WINLATOR"
+                text = "OPTIONAL: SEND TO WINLATOR"
                 setOnClickListener { sendToWinlator(file) }
             }, matchWrap())
             card.addView(Button(this).apply {
@@ -363,5 +430,10 @@ class MainActivity : Activity() {
     companion object {
         private const val REQUEST_PICK_FILE = 42
         private const val EXTRA_SHORTCUT_FILE = "com.windowbridge.EXTRA_SHORTCUT_FILE"
+        private const val PREFS = "windowbridge_settings"
+        private const val KEY_PROFILE = "compatibility_profile"
+        private const val PROFILE_AUTO = "auto"
+        private const val PROFILE_LIGHT = "lightweight"
+        private const val PROFILE_GAMES = "games"
     }
 }
