@@ -25,6 +25,7 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
         render()
         handleIncoming(intent)
+        openInstallerDetailsFromShortcut()
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -41,7 +42,7 @@ class MainActivity : Activity() {
         }
 
         root.addView(label("WINDOWBRIDGE", 27f, 0xFFEAF2FF.toInt(), true), matchWrap())
-        root.addView(label("WINDOWS APP LIBRARY • v0.4.0", 12f, 0xFF79AFFF.toInt(), true).apply {
+        root.addView(label("WINDOWS APP LIBRARY • v0.5.0", 12f, 0xFF79AFFF.toInt(), true).apply {
             setPadding(0, dp(8), 0, dp(24))
         }, matchWrap())
 
@@ -181,6 +182,11 @@ class MainActivity : Activity() {
             }, matchWrap())
 
             card.addView(Button(this).apply {
+                text = "ADD HOME-SCREEN SHORTCUT"
+                setOnClickListener { createHomeShortcut(file) }
+            }, matchWrap())
+
+            card.addView(Button(this).apply {
                 text = "OPEN WINDOWS RUNTIME"
                 setOnClickListener { openInstallerInRuntime(file) }
             }, matchWrap())
@@ -204,6 +210,47 @@ class MainActivity : Activity() {
             }, LinearLayout.LayoutParams(0, dp(48), 1f))
             card.addView(actions, matchWrap())
             library.addView(card, matchWrap().apply { bottomMargin = dp(10) })
+        }
+    }
+
+
+    private fun createHomeShortcut(file: File) {
+        if (android.os.Build.VERSION.SDK_INT < 26) {
+            Toast.makeText(this, "Home-screen shortcuts require Android 8 or newer.", Toast.LENGTH_LONG).show()
+            return
+        }
+        val manager = getSystemService(android.content.pm.ShortcutManager::class.java)
+        if (manager == null || !manager.isRequestPinShortcutSupported) {
+            Toast.makeText(this, "Your launcher does not allow pinned shortcuts.", Toast.LENGTH_LONG).show()
+            return
+        }
+        val launch = Intent(this, MainActivity::class.java).apply {
+            action = Intent.ACTION_VIEW
+            putExtra(EXTRA_SHORTCUT_FILE, file.name)
+        }
+        val shortcut = android.content.pm.ShortcutInfo.Builder(this, "installer_" + file.name.hashCode())
+            .setShortLabel(file.name.take(20))
+            .setLongLabel("Open ${file.name} in WindowBridge")
+            .setIntent(launch)
+            .setIcon(android.graphics.drawable.Icon.createWithResource(this, android.R.drawable.sym_def_app_icon))
+            .build()
+        try {
+            manager.requestPinShortcut(shortcut, null)
+            Toast.makeText(this, "Shortcut request sent to your launcher.", Toast.LENGTH_LONG).show()
+        } catch (_: Exception) {
+            Toast.makeText(this, "Could not create shortcut on this launcher.", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun openInstallerDetailsFromShortcut() {
+        val name = intent?.getStringExtra(EXTRA_SHORTCUT_FILE) ?: return
+        val file = File(File(filesDir, "installers"), name)
+        if (file.exists()) {
+            selectedInstaller = file
+            status.text = "Shortcut opened: ${file.name}. Choose Open Windows Runtime below."
+            showDetails(file)
+        } else {
+            status.text = "That installer is no longer in your library."
         }
     }
 
@@ -315,5 +362,6 @@ class MainActivity : Activity() {
 
     companion object {
         private const val REQUEST_PICK_FILE = 42
+        private const val EXTRA_SHORTCUT_FILE = "com.windowbridge.EXTRA_SHORTCUT_FILE"
     }
 }
