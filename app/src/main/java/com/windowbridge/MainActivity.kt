@@ -18,6 +18,7 @@ import android.text.TextWatcher
 import androidx.core.content.FileProvider
 import java.io.File
 import java.io.IOException
+import java.security.MessageDigest
 
 class MainActivity : Activity() {
     private lateinit var status: TextView
@@ -384,8 +385,11 @@ class MainActivity : Activity() {
         }
         val files = if (query.isBlank()) typedFiles else typedFiles.filter { it.name.contains(query, ignoreCase = true) }
         if (files.isEmpty()) {
-            val emptyMessage = if (allFiles.isEmpty()) "Your library is empty. Import an installer to get started."
-                else "No saved installers match “$query”."
+            val emptyMessage = when {
+                allFiles.isEmpty() -> "Your library is empty. Import an installer to get started."
+                typedFiles.isEmpty() -> "No ${currentTypeLabel().lowercase()} found. Change the file-type filter to see other installers."
+                else -> "No saved installers match “$query”."
+            }
             library.addView(label(emptyMessage, 14f, 0xFF91A7C7.toInt(), false).apply {
                 setPadding(0, dp(12), 0, dp(12))
             }, matchWrap())
@@ -419,6 +423,10 @@ class MainActivity : Activity() {
             card.addView(Button(this).apply {
                 text = "SHARE WITH ANOTHER APP"
                 setOnClickListener { shareInstaller(file) }
+            }, matchWrap())
+            card.addView(Button(this).apply {
+                text = "CALCULATE SHA-256 FINGERPRINT"
+                setOnClickListener { calculateSha256(file) }
             }, matchWrap())
 
             val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
@@ -535,6 +543,52 @@ class MainActivity : Activity() {
             status.text = "Could not share installer: ${e.message ?: "unknown error"}"
             Toast.makeText(this, "Sharing failed", Toast.LENGTH_SHORT).show()
         }
+    }
+
+    private fun calculateSha256(file: File) {
+        if (!file.isFile) {
+            status.text = "Cannot verify: installer file is missing."
+            return
+        }
+        status.text = "Calculating SHA-256 for ${file.name}…"
+        Thread {
+            val hash = try {
+                val digest = MessageDigest.getInstance("SHA-256")
+                file.inputStream().buffered().use { input ->
+                    val buffer = ByteArray(64 * 1024)
+                    while (true) {
+                        val count = input.read(buffer)
+                        if (count < 0) break
+                        digest.update(buffer, 0, count)
+                    }
+                }
+                digest.digest().joinToString("") { "%02x".format(it) }
+            } catch (e: Exception) {
+                "ERROR: ${e.message ?: "could not read file"}"
+            }
+            runOnUiThread {
+                if (hash.startsWith("ERROR:")) {
+                    status.text = "SHA-256 check failed."
+                    AlertDialog.Builder(this)
+                        .setTitle("Could not calculate fingerprint")
+                        .setMessage(hash.removePrefix("ERROR: "))
+                        .setPositiveButton("OK", null)
+                        .show()
+                } else {
+                    status.text = "SHA-256 calculated for ${file.name}"
+                    AlertDialog.Builder(this)
+                        .setTitle("SHA-256 fingerprint")
+                        .setMessage("${file.name}\n\n$hash\n\nCompare this value with a fingerprint from a trusted publisher. A matching hash verifies file identity, not whether the file is safe.")
+                        .setPositiveButton("Copy") { _, _ ->
+                            val clipboard = getSystemService(android.content.ClipboardManager::class.java)
+                            clipboard?.setPrimaryClip(android.content.ClipData.newPlainText("SHA-256", hash))
+                            Toast.makeText(this, "Fingerprint copied", Toast.LENGTH_SHORT).show()
+                        }
+                        .setNegativeButton("Close", null)
+                        .show()
+                }
+            }
+        }.start()
     }
 
     private fun showDetails(file: File) {
