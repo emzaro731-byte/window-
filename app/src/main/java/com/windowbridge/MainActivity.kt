@@ -181,6 +181,10 @@ class MainActivity : Activity() {
             }, matchWrap())
 
             card.addView(Button(this).apply {
+                text = "OPEN WINDOWS RUNTIME"
+                setOnClickListener { openInstallerInRuntime(file) }
+            }, matchWrap())
+            card.addView(Button(this).apply {
                 text = "TRY SENDING TO WINLATOR"
                 setOnClickListener { sendToWinlator(file) }
             }, matchWrap())
