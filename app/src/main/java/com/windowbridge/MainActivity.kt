@@ -111,6 +111,20 @@ class MainActivity : Activity() {
         }
         root.addView(librarySummary, matchWrap())
 
+        root.addView(Button(this).apply {
+            text = "SORT: ${currentSortLabel()}  ↕"
+            setOnClickListener {
+                val next = when (currentSort()) {
+                    SORT_NEWEST -> SORT_NAME
+                    SORT_NAME -> SORT_LARGEST
+                    else -> SORT_NEWEST
+                }
+                getSharedPreferences(PREFS, MODE_PRIVATE).edit().putString(KEY_SORT, next).apply()
+                refreshLibrary()
+                (this as Button).text = "SORT: ${currentSortLabel()}  ↕"
+            }
+        }, matchWrap())
+
         library = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         root.addView(library, matchWrap())
 
@@ -317,12 +331,26 @@ class MainActivity : Activity() {
         } catch (_: Exception) { null }
     }
 
+    private fun currentSort(): String =
+        getSharedPreferences(PREFS, MODE_PRIVATE).getString(KEY_SORT, SORT_NEWEST) ?: SORT_NEWEST
+
+    private fun currentSortLabel(): String = when (currentSort()) {
+        SORT_NAME -> "NAME A–Z"
+        SORT_LARGEST -> "LARGEST FIRST"
+        else -> "NEWEST FIRST"
+    }
+
     private fun refreshLibrary() {
         if (!::library.isInitialized) return
         library.removeAllViews()
         val folder = File(filesDir, "installers")
         val query = searchField?.text?.toString()?.trim().orEmpty()
-        val allFiles = folder.listFiles()?.filter { it.isFile }?.sortedByDescending { it.lastModified() } ?: emptyList()
+        val unsortedFiles = folder.listFiles()?.filter { it.isFile } ?: emptyList()
+        val allFiles = when (currentSort()) {
+            SORT_NAME -> unsortedFiles.sortedBy { it.name.lowercase() }
+            SORT_LARGEST -> unsortedFiles.sortedByDescending { it.length() }
+            else -> unsortedFiles.sortedByDescending { it.lastModified() }
+        }
         val totalBytes = allFiles.sumOf { it.length() }
         val used = android.text.format.Formatter.formatShortFileSize(this, totalBytes)
         librarySummary.text = "${allFiles.size} installer${if (allFiles.size == 1) "" else "s"} • ${used} used"
@@ -528,6 +556,10 @@ class MainActivity : Activity() {
         private const val EXTRA_SHORTCUT_FILE = "com.windowbridge.EXTRA_SHORTCUT_FILE"
         private const val PREFS = "windowbridge_settings"
         private const val KEY_PROFILE = "compatibility_profile"
+        private const val KEY_SORT = "installer_sort"
+        private const val SORT_NEWEST = "newest"
+        private const val SORT_NAME = "name"
+        private const val SORT_LARGEST = "largest"
         private const val PROFILE_AUTO = "auto"
         private const val PROFILE_LIGHT = "lightweight"
         private const val PROFILE_GAMES = "games"
